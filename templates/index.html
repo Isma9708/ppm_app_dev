@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dispute Analysis Tool</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+    <div class="container-fluid">
+        <nav class="navbar navbar-expand-lg navbar-dark mb-4">
+            <div class="container-fluid">
+                <a class="navbar-brand" href="/">
+                    <i class="fas fa-chart-line me-2"></i>
+                    Dispute Analysis Tool
+                </a>
+            </div>
+        </nav>
+        
+        <div class="container">
+            <div class="row justify-content-center">
+                <div class="col-md-10">
+                    <div class="card shadow-lg">
+                        <div class="card-header bg-primary text-white">
+                            <h3 class="card-title mb-0">
+                                <i class="fas fa-file-upload me-2"></i>
+                                Upload Files for Analysis
+                            </h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="alert-container mb-3"></div>
+                            
+                            <div class="mb-4">
+                                <h5>Welcome to the Dispute Analysis Tool</h5>
+                                <p>This tool helps you identify and analyze discrepancies between bill back documents and PPM pricing. Please upload the required Excel files to begin.</p>
+                            </div>
+                            
+                            <form id="uploadForm" enctype="multipart/form-data">
+                                <div class="row">
+                                    <div class="col-md-6 mb-4">
+                                        <div class="file-upload-area p-3 border rounded">
+                                            <label class="form-label fw-bold">Bill Back File</label>
+                                            <div class="d-flex align-items-center">
+                                                <i class="fas fa-file-excel text-success fs-3 me-3"></i>
+                                                <div class="flex-grow-1">
+                                                    <input type="file" class="form-control file-input" name="billback" accept=".xlsx,.xls" required>
+                                                    <small class="text-muted file-name"></small>
+                                                </div>
+                                            </div>
+                                            <small class="text-muted d-block mt-2">Excel file containing bill back data</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6 mb-4">
+                                        <div class="file-upload-area p-3 border rounded">
+                                            <label class="form-label fw-bold">Item Reference File</label>
+                                            <div class="d-flex align-items-center">
+                                                <i class="fas fa-file-excel text-success fs-3 me-3"></i>
+                                                <div class="flex-grow-1">
+                                                    <input type="file" class="form-control file-input" name="item_ref" accept=".xlsx,.xls" required>
+                                                    <small class="text-muted file-name"></small>
+                                                </div>
+                                            </div>
+                                            <small class="text-muted d-block mt-2">Excel file containing item reference data</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6 mb-4">
+                                        <div class="file-upload-area p-3 border rounded">
+                                            <label class="form-label fw-bold">PPM File</label>
+                                            <div class="d-flex align-items-center">
+                                                <i class="fas fa-file-excel text-success fs-3 me-3"></i>
+                                                <div class="flex-grow-1">
+                                                    <input type="file" class="form-control file-input" name="ppm" accept=".xlsx,.xls" required>
+                                                    <small class="text-muted file-name"></small>
+                                                </div>
+                                            </div>
+                                            <small class="text-muted d-block mt-2">Excel file containing PPM data</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6 mb-4">
+                                        <div class="file-upload-area p-3 border rounded">
+                                            <label class="form-label fw-bold">States File</label>
+                                            <div class="d-flex align-items-center">
+                                                <i class="fas fa-file-excel text-success fs-3 me-3"></i>
+                                                <div class="flex-grow-1">
+                                                    <input type="file" class="form-control file-input" name="states" accept=".xlsx,.xls" required>
+                                                    <small class="text-muted file-name"></small>
+                                                </div>
+                                            </div>
+                                            <small class="text-muted d-block mt-2">Excel file containing state abbreviation mappings</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="mt-3 text-center">
+                                    <button type="submit" id="uploadBtn" class="btn btn-primary btn-lg px-5">
+                                        <i class="fas fa-upload me-2"></i>
+                                        Upload and Continue
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <footer class="footer mt-5">
+            <div class="container text-center">
+                <p class="text-muted">Dispute Analysis Tool &copy; 2024</p>
+            </div>
+        </footer>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const uploadForm = document.getElementById('uploadForm');
+            const uploadBtn = document.getElementById('uploadBtn');
+            const alertContainer = document.querySelector('.alert-container');
+            const fileInputs = document.querySelectorAll('.file-input');
+            
+            // Update filename display when files are selected
+            fileInputs.forEach(input => {
+                input.addEventListener('change', function() {
+                    const fileNameElement = this.closest('.file-upload-area').querySelector('.file-name');
+                    if (this.files && this.files[0]) {
+                        fileNameElement.textContent = this.files[0].name;
+                    } else {
+                        fileNameElement.textContent = '';
+                    }
+                });
+            });
+            
+            // Show alert function
+            function showAlert(message, type) {
+                const alert = document.createElement('div');
+                alert.className = `alert alert-${type} alert-dismissible fade show`;
+                alert.innerHTML = `
+                    <i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-triangle'} me-2"></i>
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                `;
+                alertContainer.innerHTML = '';
+                alertContainer.appendChild(alert);
+                
+                // Auto dismiss after 5 seconds
+                setTimeout(() => {
+                    const bsAlert = bootstrap.Alert.getOrCreateInstance(alert);
+                    bsAlert.close();
+                }, 5000);
+            }
+            
+            // Form submission
+            uploadForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                // Validate all files are selected
+                let allFilesSelected = true;
+                fileInputs.forEach(input => {
+                    if (!input.files || input.files.length === 0) {
+                        input.classList.add('is-invalid');
+                        allFilesSelected = false;
+                    } else {
+                        input.classList.remove('is-invalid');
+                    }
+                });
+                
+                if (!allFilesSelected) {
+                    showAlert('Please select all required files', 'danger');
+                    return;
+                }
+                
+                // Show loading state
+                uploadBtn.disabled = true;
+                uploadBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Uploading...';
+                
+                // Create FormData
+                const formData = new FormData(uploadForm);
+                
+                // Send to server
+                fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`Server responded with ${response.status}: ${response.statusText}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        showAlert('Files uploaded successfully! Redirecting to analysis...', 'success');
+                        
+                        // Store session ID
+                        localStorage.setItem('sessionId', data.sessionId);
+                        
+                        // Redirect after short delay
+                        setTimeout(() => {
+                            window.location.href = `/analyzer?sessionId=${data.sessionId}`;
+                        }, 2000);
+                    } else {
+                        throw new Error(data.message || 'Unknown error occurred');
+                    }
+                })
+                .catch(error => {
+                    console.error('Upload error:', error);
+                    showAlert(`Upload failed: ${error.message}. Make sure the server is running.`, 'danger');
+                })
+                .finally(() => {
+                    // Reset button state
+                    uploadBtn.disabled = false;
+                    uploadBtn.innerHTML = '<i class="fas fa-upload me-2"></i> Upload and Continue';
+                });
+            });
+        });
+    </script>
+</body>
+</html>
