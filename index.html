@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dispute Analysis Tool</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa;
+            color: #353535;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            text-align: center;
+        }
+        .container {
+            max-width: 800px;
+            background-color: white;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .header {
+            margin-bottom: 30px;
+        }
+        h1 {
+            color: #3c6e71;
+            margin-bottom: 10px;
+        }
+        .description {
+            margin-bottom: 40px;
+            line-height: 1.6;
+        }
+        .upload-section {
+            border: 2px dashed #d8d8d8;
+            border-radius: 6px;
+            padding: 30px;
+            margin-bottom: 30px;
+            background-color: #fcfcfc;
+        }
+        .file-input-group {
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 15px;
+        }
+        .file-input-group label {
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #284b63;
+        }
+        .file-input {
+            margin-bottom: 5px;
+        }
+        .btn-primary {
+            background-color: #3c6e71;
+            color: white;
+            padding: 12px 25px;
+            border: none;
+            border-radius: 4px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: background-color 0.3s;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 20px;
+        }
+        .btn-primary:hover {
+            background-color: #284b63;
+        }
+        .instructions {
+            background-color: #f0f7fa;
+            border-left: 4px solid #3c6e71;
+            padding: 15px;
+            margin-top: 30px;
+            text-align: left;
+        }
+        .instructions h3 {
+            margin-top: 0;
+            color: #284b63;
+        }
+        .instructions ul {
+            padding-left: 20px;
+        }
+        .instructions li {
+            margin-bottom: 8px;
+        }
+        .footer {
+            margin-top: 40px;
+            font-size: 14px;
+            color: #777;
+        }
+        .github-info {
+            margin-top: 30px;
+            padding: 15px;
+            background-color: #f8f4e3;
+            border-radius: 6px;
+        }
+        .alert {
+            padding: 10px 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        .alert-danger {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .alert-success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .loading {
+            display: none;
+            margin-left: 10px;
+        }
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Dispute Analysis Tool</h1>
+            <p>Compare billback and PPM data to identify discrepancies and analyze performance</p>
+        </div>
+        
+        <div class="description">
+            <p>This tool allows you to upload Excel files containing billback data, item reference, PPM data, and state information to analyze discrepancies between billing systems.</p>
+        </div>
+        
+        <div id="alert" class="alert"></div>
+        
+        <div class="upload-section">
+            <h2>File Upload</h2>
+            <p>Upload the required Excel files to begin analysis</p>
+            
+            <form id="upload-form" enctype="multipart/form-data">
+                <div class="file-input-group">
+                    <label for="billback">Billback File:</label>
+                    <input type="file" id="billback" name="billback" class="file-input" accept=".xlsx,.xls" required>
+                    <small>Excel file containing billback data</small>
+                </div>
+                
+                <div class="file-input-group">
+                    <label for="item_ref">Item Reference File:</label>
+                    <input type="file" id="item_ref" name="item_ref" class="file-input" accept=".xlsx,.xls" required>
+                    <small>Excel file containing item reference data</small>
+                </div>
+                
+                <div class="file-input-group">
+                    <label for="ppm">PPM File:</label>
+                    <input type="file" id="ppm" name="ppm" class="file-input" accept=".xlsx,.xls" required>
+                    <small>Excel file containing PPM data</small>
+                </div>
+                
+                <div class="file-input-group">
+                    <label for="states">States File:</label>
+                    <input type="file" id="states" name="states" class="file-input" accept=".xlsx,.xls" required>
+                    <small>Excel file containing state information</small>
+                </div>
+                
+                <button type="submit" id="uploadBtn" class="btn-primary">
+                    Upload and Continue
+                    <span class="loading"><span class="spinner"></span></span>
+                </button>
+            </form>
+        </div>
+        
+        <div class="instructions">
+            <h3>Instructions</h3>
+            <ul>
+                <li><strong>Billback File:</strong> Must contain columns for Material, Posting Period, At price, Case in Part, Part Amount, and Extended Part.</li>
+                <li><strong>Item Reference File:</strong> Must contain columns for Supp. Brand Desc. and Package Size.</li>
+                <li><strong>PPM File:</strong> Must contain columns for Dist Item#, Start, Net$, Quantity, Unit Rebate$, and Rebate.</li>
+                <li><strong>States File:</strong> Must contain state information for market filtering.</li>
+            </ul>
+            <p>All files must be in Excel format (.xlsx or .xls).</p>
+        </div>
+        
+        <div class="github-info">
+            <h3>Server Requirements</h3>
+            <p>This application requires a running server to function properly. If you're seeing this page but the upload isn't working:</p>
+            <ol>
+                <li>Make sure the Node.js server is running with <code>node server.js</code></li>
+                <li>Check that you're accessing this page via the server (usually http://localhost:3000) and not directly as a file</li>
+                <li>Check your browser console for any errors</li>
+            </ol>
+        </div>
+        
+        <div class="footer">
+            <p>Dispute Analysis Tool © 2025 | <a href="#">Documentation</a> | <a href="#">Help</a></p>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const uploadForm = document.getElementById('upload-form');
+            const uploadButton = document.getElementById('uploadBtn');
+            const loadingSpinner = document.querySelector('.loading');
+            const alertBox = document.getElementById('alert');
+            
+            // Show alert function
+            function showAlert(message, type) {
+                alertBox.textContent = message;
+                alertBox.className = `alert alert-${type}`;
+                alertBox.style.display = 'block';
+                
+                // Auto hide after 5 seconds
+                setTimeout(() => {
+                    alertBox.style.display = 'none';
+                }, 5000);
+            }
+            
+            // Form submission
+            uploadForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                // Validate all files are selected
+                const fileInputs = uploadForm.querySelectorAll('input[type="file"]');
+                let allFilesSelected = true;
+                
+                fileInputs.forEach(input => {
+                    if (!input.files || input.files.length === 0) {
+                        allFilesSelected = false;
+                    }
+                });
+                
+                if (!allFilesSelected) {
+                    showAlert('Please select all required files', 'danger');
+                    return;
+                }
+                
+                // Show loading spinner
+                uploadButton.disabled = true;
+                loadingSpinner.style.display = 'inline-block';
+                
+                // Create FormData object
+                const formData = new FormData(uploadForm);
+                
+                // Send AJAX request
+                fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`Server responded with ${response.status}: ${response.statusText}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        showAlert('Files uploaded successfully! Redirecting...', 'success');
+                        localStorage.setItem('sessionId', data.sessionId);
+                        
+                        // Redirect to analyzer after short delay
+                        setTimeout(() => {
+                            window.location.href = `/analyzer?sessionId=${data.sessionId}`;
+                        }, 1500);
+                    } else {
+                        showAlert(`Error: ${data.message}`, 'danger');
+                    }
+                })
+                .catch(error => {
+                    console.error('Upload error:', error);
+                    showAlert(`Upload failed: ${error.message}. Make sure the server is running.`, 'danger');
+                })
+                .finally(() => {
+                    // Hide loading spinner
+                    uploadButton.disabled = false;
+                    loadingSpinner.style.display = 'none';
+                });
+            });
+        });
+    </script>
+</body>
+</html>
