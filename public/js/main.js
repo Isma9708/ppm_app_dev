@@ -2,6 +2,16 @@
  * Dispute Analysis Tool - Main JavaScript
  */
 
+// Global state for manual matching
+const manualMatchState = {
+    billbackSelected: null,
+    ppmSelected: null,
+    billbackData: [],
+    ppmData: [],
+    matchedPairs: [],
+    sessionId: null
+};
+
 document.addEventListener('DOMContentLoaded', function() {
     // Check if we're on the index page or analyzer page
     const isIndexPage = window.location.pathname === '/' || 
@@ -112,6 +122,7 @@ function setupAnalyzerPage() {
     // Get session ID from URL or localStorage
     const urlParams = new URLSearchParams(window.location.search);
     const sessionId = urlParams.get('sessionId') || localStorage.getItem('sessionId');
+    manualMatchState.sessionId = sessionId;
     
     if (!sessionId) {
         showAlert('No session found. Please upload files first.', 'danger');
@@ -141,6 +152,542 @@ function setupAnalyzerPage() {
             window.location.href = `/export_excel?sessionId=${sessionId}`;
         };
     }
+    
+    // Initialize manual matching functionality
+    initializeManualMatching();
+    
+    // Initialize DataTables for main results table
+    if ($.fn.DataTable.isDataTable('#resultsTable')) {
+        $('#resultsTable').DataTable().destroy();
+    }
+    
+    $('#resultsTable').DataTable({
+        ordering: true,
+        paging: true,
+        searching: true,
+        responsive: true,
+        lengthMenu: [10, 25, 50, 100],
+        language: {
+            search: "_INPUT_",
+            searchPlaceholder: "Search results...",
+            lengthMenu: "Show _MENU_ entries",
+            info: "Showing _START_ to _END_ of _TOTAL_ entries",
+            infoEmpty: "Showing 0 to 0 of 0 entries",
+            infoFiltered: "(filtered from _MAX_ total entries)"
+        }
+    });
+}
+
+/**
+ * Initialize manual matching functionality
+ */
+function initializeManualMatching() {
+    // Initialize DataTables for matching tables
+    if ($.fn.DataTable.isDataTable('#billbackTable')) {
+        $('#billbackTable').DataTable().destroy();
+    }
+    
+    if ($.fn.DataTable.isDataTable('#ppmTable')) {
+        $('#ppmTable').DataTable().destroy();
+    }
+    
+    // Initialize Billback table with selection functionality
+    const billbackTable = $('#billbackTable').DataTable({
+        ordering: true,
+        paging: true,
+        searching: true,
+        lengthMenu: [10, 25, 50],
+        select: {
+            style: 'single'
+        },
+        columnDefs: [
+            { width: '20%', targets: 0 },
+            { width: '20%', targets: 1 },
+            { width: '20%', targets: 2 },
+            { width: '20%', targets: 3 },
+            { width: '20%', targets: 4 }
+        ],
+        language: {
+            search: "_INPUT_",
+            searchPlaceholder: "Search billback data...",
+            emptyTable: "No billback data available"
+        }
+    });
+    
+    // Initialize PPM table with selection functionality
+    const ppmTable = $('#ppmTable').DataTable({
+        ordering: true,
+        paging: true,
+        searching: true,
+        lengthMenu: [10, 25, 50],
+        select: {
+            style: 'single'
+        },
+        columnDefs: [
+            { width: '20%', targets: 0 },
+            { width: '20%', targets: 1 },
+            { width: '20%', targets: 2 },
+            { width: '20%', targets: 3 },
+            { width: '20%', targets: 4 }
+        ],
+        language: {
+            search: "_INPUT_",
+            searchPlaceholder: "Search PPM data...",
+            emptyTable: "No PPM data available"
+        }
+    });
+    
+    // Setup selection listeners for billback table
+    $('#billbackTable tbody').on('click', 'tr', function() {
+        const rowData = billbackTable.row(this).data();
+        if (rowData) {
+            manualMatchState.billbackSelected = {
+                index: billbackTable.row(this).index(),
+                material: rowData[0],
+                caseInPart: rowData[1],
+                partAmount: rowData[2],
+                extendedPart: rowData[3],
+                status: rowData[4]
+            };
+            
+            // Update UI
+            updateMatchButtonState();
+            updateMatchDetails();
+            
+            // Highlight selected row
+            $('#billbackTable tbody tr').removeClass('selected-row');
+            $(this).addClass('selected-row');
+        }
+    });
+    
+    // Setup selection listeners for PPM table
+    $('#ppmTable tbody').on('click', 'tr', function() {
+        const rowData = ppmTable.row(this).data();
+        if (rowData) {
+            manualMatchState.ppmSelected = {
+                index: ppmTable.row(this).index(),
+                material: rowData[0],
+                netPrice: rowData[1],
+                quantity: rowData[2],
+                unitRebate: rowData[3],
+                status: rowData[4]
+            };
+            
+            // Update UI
+            updateMatchButtonState();
+            updateMatchDetails();
+            
+            // Highlight selected row
+            $('#ppmTable tbody tr').removeClass('selected-row');
+            $(this).addClass('selected-row');
+        }
+    });
+    
+    // Show only unmatched checkbox functionality
+    $('#showOnlyUnmatchedCheck').on('change', function() {
+        const showOnlyUnmatched = $(this).is(':checked');
+        
+        if (showOnlyUnmatched) {
+            billbackTable.column(4).search('Unmatched').draw();
+            ppmTable.column(4).search('Unmatched').draw();
+        } else {
+            billbackTable.column(4).search('').draw();
+            ppmTable.column(4).search('').draw();
+        }
+    });
+    
+    // Match selected button click handler
+    $('#matchSelectedBtn').on('click', function() {
+        if (manualMatchState.billbackSelected && manualMatchState.ppmSelected) {
+            createManualMatch();
+        }
+    });
+    
+    // Unmatch selected button click handler
+    $('#unmatchSelectedBtn').on('click', function() {
+        if (manualMatchState.billbackSelected && manualMatchState.ppmSelected) {
+            removeManualMatch();
+        }
+    });
+    
+    // Recalculate button click handler
+    $('#recalculateBtn').on('click', function() {
+        recalculateAnalysis();
+    });
+    
+    // Show manual matching tab handler
+    $('#manual-match-tab').on('shown.bs.tab', function() {
+        loadManualMatchingData();
+    });
+}
+
+/**
+ * Load data for manual matching tables
+ */
+function loadManualMatchingData() {
+    const sessionId = manualMatchState.sessionId;
+    if (!sessionId) return;
+    
+    showLoading(true);
+    
+    // Get selected filter values
+    const market = document.getElementById('market').value;
+    const brand = document.getElementById('brand').value;
+    const year = document.getElementById('year').value;
+    const month = document.getElementById('month').value;
+    
+    // Validate selections
+    if (!market || !brand || !year || !month) {
+        showAlert('Please run analysis with all filter options selected before attempting manual matching.', 'warning');
+        showLoading(false);
+        return;
+    }
+    
+    // Fetch data for manual matching
+    fetch('/manual-match-data', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            sessionId,
+            market,
+            brand,
+            year,
+            month
+        })
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`Server responded with ${response.status}: ${response.statusText}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            // Store data
+            manualMatchState.billbackData = data.billbackData;
+            manualMatchState.ppmData = data.ppmData;
+            manualMatchState.matchedPairs = data.matchedPairs;
+            
+            // Populate tables
+            populateManualMatchingTables(data);
+        } else {
+            throw new Error(data.error || 'Unknown error occurred');
+        }
+    })
+    .catch(error => {
+        console.error('Error loading manual matching data:', error);
+        showAlert(`Error loading manual matching data: ${error.message}`, 'danger');
+    })
+    .finally(() => {
+        showLoading(false);
+    });
+}
+
+/**
+ * Populate the manual matching tables with data
+ */
+function populateManualMatchingTables(data) {
+    const billbackTable = $('#billbackTable').DataTable();
+    const ppmTable = $('#ppmTable').DataTable();
+    
+    // Clear existing data
+    billbackTable.clear();
+    ppmTable.clear();
+    
+    // Add billback data
+    data.billbackData.forEach(row => {
+        // Determine match status
+        let status = 'Unmatched';
+        for (const pair of data.matchedPairs) {
+            if (pair.billbackIndex === row.index) {
+                status = 'Matched';
+                break;
+            }
+        }
+        
+        billbackTable.row.add([
+            row.material,
+            row.caseInPart,
+            `$${row.partAmount.toFixed(2)}`,
+            `$${row.extendedPart.toFixed(2)}`,
+            status
+        ]);
+    });
+    
+    // Add PPM data
+    data.ppmData.forEach(row => {
+        // Determine match status
+        let status = 'Unmatched';
+        for (const pair of data.matchedPairs) {
+            if (pair.ppmIndex === row.index) {
+                status = 'Matched';
+                break;
+            }
+        }
+        
+        ppmTable.row.add([
+            row.material,
+            `$${row.netPrice.toFixed(2)}`,
+            row.quantity,
+            `$${row.unitRebate.toFixed(2)}`,
+            status
+        ]);
+    });
+    
+    // Redraw the tables
+    billbackTable.draw();
+    ppmTable.draw();
+    
+    // Reset selection state
+    manualMatchState.billbackSelected = null;
+    manualMatchState.ppmSelected = null;
+    updateMatchButtonState();
+    updateMatchDetails();
+}
+
+/**
+ * Update match button enabled/disabled state based on selections
+ */
+function updateMatchButtonState() {
+    const matchBtn = document.getElementById('matchSelectedBtn');
+    const unmatchBtn = document.getElementById('unmatchSelectedBtn');
+    
+    if (manualMatchState.billbackSelected && manualMatchState.ppmSelected) {
+        matchBtn.disabled = false;
+        
+        // Check if this pair is already matched
+        const isMatched = manualMatchState.matchedPairs.some(
+            pair => pair.billbackIndex === manualMatchState.billbackSelected.index && 
+                   pair.ppmIndex === manualMatchState.ppmSelected.index
+        );
+        
+        unmatchBtn.disabled = !isMatched;
+    } else {
+        matchBtn.disabled = true;
+        unmatchBtn.disabled = true;
+    }
+}
+
+/**
+ * Update the current match details display
+ */
+function updateMatchDetails() {
+    const billback = manualMatchState.billbackSelected;
+    const ppm = manualMatchState.ppmSelected;
+    
+    if (billback && ppm) {
+        // Update billback row
+        document.querySelector('#billbackMatchRow td:nth-child(2)').textContent = billback.material;
+        document.querySelector('#billbackMatchRow td:nth-child(3)').textContent = billback.caseInPart;
+        document.querySelector('#billbackMatchRow td:nth-child(4)').textContent = `$${parseFloat(billback.extendedPart.replace('$', '')).toFixed(2)}`;
+        
+        // Update PPM row
+        document.querySelector('#ppmMatchRow td:nth-child(2)').textContent = ppm.material;
+        document.querySelector('#ppmMatchRow td:nth-child(3)').textContent = ppm.quantity;
+        document.querySelector('#ppmMatchRow td:nth-child(4)').textContent = `$${parseFloat(ppm.netPrice.replace('$', '')).toFixed(2)}`;
+        
+        // Calculate variance
+        const billbackAmount = parseFloat(billback.extendedPart.replace('$', ''));
+        const ppmAmount = parseFloat(ppm.netPrice.replace('$', ''));
+        const variance = ppmAmount - billbackAmount;
+        
+        document.getElementById('matchVariance').textContent = `$${variance.toFixed(2)}`;
+        document.getElementById('matchVariance').className = variance < 0 ? 'text-danger' : 'text-success';
+        
+        document.getElementById('currentMatchDetails').textContent = 
+            `Viewing potential match between Billback Material ${billback.material} and PPM Material ${ppm.material}`;
+    } else {
+        // Reset to default state
+        document.querySelector('#billbackMatchRow td:nth-child(2)').textContent = '-';
+        document.querySelector('#billbackMatchRow td:nth-child(3)').textContent = '-';
+        document.querySelector('#billbackMatchRow td:nth-child(4)').textContent = '-';
+        
+        document.querySelector('#ppmMatchRow td:nth-child(2)').textContent = '-';
+        document.querySelector('#ppmMatchRow td:nth-child(3)').textContent = '-';
+        document.querySelector('#ppmMatchRow td:nth-child(4)').textContent = '-';
+        
+        document.getElementById('matchVariance').textContent = '-';
+        document.getElementById('matchVariance').className = '';
+        
+        document.getElementById('currentMatchDetails').textContent = 
+            'No match selected. Select rows from both tables to see match details.';
+    }
+}
+
+/**
+ * Create a manual match between selected billback and PPM rows
+ */
+function createManualMatch() {
+    const sessionId = manualMatchState.sessionId;
+    const billback = manualMatchState.billbackSelected;
+    const ppm = manualMatchState.ppmSelected;
+    
+    if (!sessionId || !billback || !ppm) {
+        showAlert('Please select items from both tables to match.', 'warning');
+        return;
+    }
+    
+    showLoading(true);
+    
+    fetch('/create-manual-match', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            sessionId,
+            billbackIndex: billback.index,
+            ppmIndex: ppm.index
+        })
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`Server responded with ${response.status}: ${response.statusText}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            showAlert('Manual match created successfully!', 'success');
+            
+            // Update local state
+            manualMatchState.matchedPairs = data.matchedPairs;
+            
+            // Refresh tables
+            loadManualMatchingData();
+        } else {
+            throw new Error(data.error || 'Unknown error occurred');
+        }
+    })
+    .catch(error => {
+        console.error('Error creating manual match:', error);
+        showAlert(`Error creating manual match: ${error.message}`, 'danger');
+    })
+    .finally(() => {
+        showLoading(false);
+    });
+}
+
+/**
+ * Remove a manual match between selected billback and PPM rows
+ */
+function removeManualMatch() {
+    const sessionId = manualMatchState.sessionId;
+    const billback = manualMatchState.billbackSelected;
+    const ppm = manualMatchState.ppmSelected;
+    
+    if (!sessionId || !billback || !ppm) {
+        showAlert('Please select a matched pair to unmatch.', 'warning');
+        return;
+    }
+    
+    // Check if this pair is actually matched
+    const isMatched = manualMatchState.matchedPairs.some(
+        pair => pair.billbackIndex === billback.index && pair.ppmIndex === ppm.index
+    );
+    
+    if (!isMatched) {
+        showAlert('These items are not currently matched.', 'warning');
+        return;
+    }
+    
+    showLoading(true);
+    
+    fetch('/remove-manual-match', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            sessionId,
+            billbackIndex: billback.index,
+            ppmIndex: ppm.index
+        })
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`Server responded with ${response.status}: ${response.statusText}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            showAlert('Manual match removed successfully!', 'success');
+            
+            // Update local state
+            manualMatchState.matchedPairs = data.matchedPairs;
+            
+            // Refresh tables
+            loadManualMatchingData();
+        } else {
+            throw new Error(data.error || 'Unknown error occurred');
+        }
+    })
+    .catch(error => {
+        console.error('Error removing manual match:', error);
+        showAlert(`Error removing manual match: ${error.message}`, 'danger');
+    })
+    .finally(() => {
+        showLoading(false);
+    });
+}
+
+/**
+ * Recalculate analysis using current manual matches
+ */
+function recalculateAnalysis() {
+    const sessionId = manualMatchState.sessionId;
+    if (!sessionId) return;
+    
+    showLoading(true);
+    
+    // Get selected filter values
+    const market = document.getElementById('market').value;
+    const brand = document.getElementById('brand').value;
+    const year = document.getElementById('year').value;
+    const month = document.getElementById('month').value;
+    
+    fetch('/recalculate-analysis', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            sessionId,
+            market,
+            brand,
+            year,
+            month
+        })
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`Server responded with ${response.status}: ${response.statusText}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            showAlert('Analysis recalculated successfully with manual matches!', 'success');
+            
+            // Display updated results
+            displayResults(data);
+            
+            // Switch to results tab
+            document.getElementById('results-tab').click();
+        } else {
+            throw new Error(data.error || 'Unknown error occurred');
+        }
+    })
+    .catch(error => {
+        console.error('Error recalculating analysis:', error);
+        showAlert(`Error recalculating analysis: ${error.message}`, 'danger');
+    })
+    .finally(() => {
+        showLoading(false);
+    });
 }
 
 /**
@@ -306,6 +853,10 @@ function displayResults(data) {
     
     // Create visualizations
     createVisualizations(data.visualizations);
+    
+    // Reset manual matching tab
+    manualMatchState.billbackSelected = null;
+    manualMatchState.ppmSelected = null;
 }
 
 /**

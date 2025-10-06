@@ -173,25 +173,179 @@
                         </div>
                     </div>
                     <div class="card-body">
-                        <div class="table-responsive">
-                            <table id="resultsTable" class="table table-striped table-bordered">
-                                <thead>
-                                    <tr>
-                                        <th>Material</th>
-                                        <th>At price</th>
-                                        <th>Case in Part</th>
-                                        <th>Part Amount</th>
-                                        <th>Extended Part</th>
-                                        <th>Net$</th>
-                                        <th>Quantity</th>
-                                        <th>Unit Rebate$</th>
-                                        <th>Rebate</th>
-                                        <th>VAR</th>
-                                        <th>Comment</th>
-                                    </tr>
-                                </thead>
-                                <tbody></tbody>
-                            </table>
+                        <ul class="nav nav-tabs" id="resultsTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="results-tab" data-bs-toggle="tab" data-bs-target="#results-pane" type="button" role="tab">
+                                    Analysis Results
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="manual-match-tab" data-bs-toggle="tab" data-bs-target="#manual-match-pane" type="button" role="tab">
+                                    Manual Matching
+                                </button>
+                            </li>
+                        </ul>
+                        
+                        <div class="tab-content" id="resultsTabContent">
+                            <!-- Analysis Results Tab -->
+                            <div class="tab-pane fade show active" id="results-pane" role="tabpanel">
+                                <div class="table-responsive mt-3">
+                                    <table id="resultsTable" class="table table-striped table-bordered">
+                                        <thead>
+                                            <tr>
+                                                <th>Material</th>
+                                                <th>At price</th>
+                                                <th>Case in Part</th>
+                                                <th>Part Amount</th>
+                                                <th>Extended Part</th>
+                                                <th>Net$</th>
+                                                <th>Quantity</th>
+                                                <th>Unit Rebate$</th>
+                                                <th>Rebate</th>
+                                                <th>VAR</th>
+                                                <th>Comment</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            
+                            <!-- Manual Matching Tab -->
+                            <div class="tab-pane fade" id="manual-match-pane" role="tabpanel">
+                                <div class="manual-match-container mt-3">
+                                    <div class="row mb-3">
+                                        <div class="col-12">
+                                            <div class="alert alert-info">
+                                                <i class="fas fa-info-circle me-2"></i>
+                                                Select one row from each table and click "Match Selected" to manually associate these records. 
+                                                Click "Unmatch" to remove a manual association.
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Match Controls -->
+                                    <div class="row mb-3">
+                                        <div class="col-md-6">
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" type="checkbox" id="showOnlyUnmatchedCheck">
+                                                <label class="form-check-label" for="showOnlyUnmatchedCheck">Show only unmatched records</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6 text-end">
+                                            <button id="matchSelectedBtn" class="btn btn-primary" disabled>
+                                                <i class="fas fa-link me-1"></i>
+                                                Match Selected
+                                            </button>
+                                            <button id="unmatchSelectedBtn" class="btn btn-outline-danger ms-2" disabled>
+                                                <i class="fas fa-unlink me-1"></i>
+                                                Unmatch
+                                            </button>
+                                            <button id="recalculateBtn" class="btn btn-success ms-2">
+                                                <i class="fas fa-sync me-1"></i>
+                                                Recalculate Analysis
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Data Tables -->
+                                    <div class="row">
+                                        <!-- Billback Data Table -->
+                                        <div class="col-md-6">
+                                            <div class="card h-100">
+                                                <div class="card-header bg-light">
+                                                    <h5 class="card-title mb-0">Billback Data</h5>
+                                                </div>
+                                                <div class="card-body p-0">
+                                                    <div class="table-responsive">
+                                                        <table id="billbackTable" class="table table-sm table-hover manual-match-table">
+                                                            <thead>
+                                                                <tr>
+                                                                    <th>Material</th>
+                                                                    <th>Case in Part</th>
+                                                                    <th>Part Amount</th>
+                                                                    <th>Extended Part</th>
+                                                                    <th>Status</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody></tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- PPM Data Table -->
+                                        <div class="col-md-6">
+                                            <div class="card h-100">
+                                                <div class="card-header bg-light">
+                                                    <h5 class="card-title mb-0">PPM Data</h5>
+                                                </div>
+                                                <div class="card-body p-0">
+                                                    <div class="table-responsive">
+                                                        <table id="ppmTable" class="table table-sm table-hover manual-match-table">
+                                                            <thead>
+                                                                <tr>
+                                                                    <th>Material</th>
+                                                                    <th>Net$</th>
+                                                                    <th>Quantity</th>
+                                                                    <th>Unit Rebate$</th>
+                                                                    <th>Status</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody></tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Match Information -->
+                                    <div class="row mt-4">
+                                        <div class="col-12">
+                                            <div class="card">
+                                                <div class="card-header bg-light">
+                                                    <h5 class="card-title mb-0">Current Match Details</h5>
+                                                </div>
+                                                <div class="card-body">
+                                                    <div id="currentMatchDetails" class="alert alert-secondary">
+                                                        No match selected. Select rows from both tables to see match details.
+                                                    </div>
+                                                    <div class="table-responsive">
+                                                        <table id="currentMatchTable" class="table table-sm table-bordered">
+                                                            <thead>
+                                                                <tr>
+                                                                    <th>Source</th>
+                                                                    <th>Material</th>
+                                                                    <th>Quantity</th>
+                                                                    <th>Amount</th>
+                                                                    <th>Variance</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                <tr id="billbackMatchRow">
+                                                                    <td><strong>Billback</strong></td>
+                                                                    <td>-</td>
+                                                                    <td>-</td>
+                                                                    <td>-</td>
+                                                                    <td rowspan="2" id="matchVariance">-</td>
+                                                                </tr>
+                                                                <tr id="ppmMatchRow">
+                                                                    <td><strong>PPM</strong></td>
+                                                                    <td>-</td>
+                                                                    <td>-</td>
+                                                                    <td>-</td>
+                                                                </tr>
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

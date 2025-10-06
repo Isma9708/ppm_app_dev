@@ -83,7 +83,8 @@ app.post('/upload', (req, res) => {
         years: [2023, 2024, 2025],
         months: ["January", "February", "March", "April", "May", "June", 
                 "July", "August", "September", "October", "November", "December"]
-      }
+      },
+      manualMatches: [] // Initialize empty array for manual matches
     };
     
     // Set session cookie
@@ -283,11 +284,347 @@ app.post('/analyze', (req, res) => {
   sessions[sessionId].analysisResults = resultData;
   sessions[sessionId].analysisStats = stats;
   
+  // Generate data for manual matching
+  generateManualMatchingData(sessionId);
+  
   return res.status(200).json({
     success: true,
     data: resultData,
     stats: stats,
     visualizations: visualizations
+  });
+});
+
+/**
+ * Generate data for manual matching
+ */
+function generateManualMatchingData(sessionId) {
+  if (!sessionId || !sessions[sessionId]) return;
+  
+  // Mock billback data
+  const billbackData = Array(100).fill().map((_, i) => ({
+    index: i,
+    material: `100${i.toString().padStart(4, '0')}`,
+    caseInPart: Math.floor(Math.random() * 20 + 10),
+    partAmount: parseFloat((Math.random() * 100 + 50).toFixed(2)),
+    extendedPart: parseFloat((Math.random() * 1000 + 500).toFixed(2))
+  }));
+  
+  // Mock PPM data
+  const ppmData = Array(100).fill().map((_, i) => ({
+    index: i,
+    material: i % 3 === 0 ? `100${i.toString().padStart(4, '0')}` : `200${i.toString().padStart(4, '0')}`,
+    netPrice: parseFloat((Math.random() * 1000 + 500).toFixed(2)),
+    quantity: Math.floor(Math.random() * 100 + 20),
+    unitRebate: parseFloat((Math.random() * 2 + 1).toFixed(2))
+  }));
+  
+  // Store in session
+  sessions[sessionId].billbackData = billbackData;
+  sessions[sessionId].ppmData = ppmData;
+}
+
+/**
+ * Endpoint to get data for manual matching
+ */
+app.post('/manual-match-data', (req, res) => {
+  const { sessionId, market, brand, year, month } = req.body;
+  
+  if (!sessionId || !sessions[sessionId]) {
+    return res.status(400).json({
+      success: false,
+      error: 'No valid session found. Please upload files first.'
+    });
+  }
+  
+  if (!sessions[sessionId].billbackData || !sessions[sessionId].ppmData) {
+    return res.status(400).json({
+      success: false,
+      error: 'No analysis data found. Please run analysis first.'
+    });
+  }
+  
+  return res.status(200).json({
+    success: true,
+    billbackData: sessions[sessionId].billbackData,
+    ppmData: sessions[sessionId].ppmData,
+    matchedPairs: sessions[sessionId].manualMatches || []
+  });
+});
+
+/**
+ * Create a manual match between billback and PPM entries
+ */
+app.post('/create-manual-match', (req, res) => {
+  const { sessionId, billbackIndex, ppmIndex } = req.body;
+  
+  if (!sessionId || !sessions[sessionId]) {
+    return res.status(400).json({
+      success: false,
+      error: 'No valid session found. Please upload files first.'
+    });
+  }
+  
+  if (!sessions[sessionId].billbackData || !sessions[sessionId].ppmData) {
+    return res.status(400).json({
+      success: false,
+      error: 'No analysis data found. Please run analysis first.'
+    });
+  }
+  
+  // Ensure indices are valid
+  const billbackData = sessions[sessionId].billbackData;
+  const ppmData = sessions[sessionId].ppmData;
+  
+  if (billbackIndex < 0 || billbackIndex >= billbackData.length || 
+      ppmIndex < 0 || ppmIndex >= ppmData.length) {
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid indices provided.'
+    });
+  }
+  
+  // Initialize manual matches array if it doesn't exist
+  if (!sessions[sessionId].manualMatches) {
+    sessions[sessionId].manualMatches = [];
+  }
+  
+  // Check if either index is already matched
+  const matchedPairs = sessions[sessionId].manualMatches;
+  const billbackAlreadyMatched = matchedPairs.some(pair => pair.billbackIndex === billbackIndex);
+  const ppmAlreadyMatched = matchedPairs.some(pair => pair.ppmIndex === ppmIndex);
+  
+  if (billbackAlreadyMatched || ppmAlreadyMatched) {
+    return res.status(400).json({
+      success: false,
+      error: 'One or both of these items are already matched. Please unmatch them first.'
+    });
+  }
+  
+  // Create the match
+  const newMatch = {
+    id: uuidv4(),
+    billbackIndex,
+    ppmIndex,
+    createdAt: new Date(),
+    variance: ppmData[ppmIndex].netPrice - billbackData[billbackIndex].extendedPart
+  };
+  
+  matchedPairs.push(newMatch);
+  
+  return res.status(200).json({
+    success: true,
+    message: 'Manual match created successfully',
+    matchedPairs: sessions[sessionId].manualMatches
+  });
+});
+
+/**
+ * Remove a manual match between billback and PPM entries
+ */
+app.post('/remove-manual-match', (req, res) => {
+  const { sessionId, billbackIndex, ppmIndex } = req.body;
+  
+  if (!sessionId || !sessions[sessionId]) {
+    return res.status(400).json({
+      success: false,
+      error: 'No valid session found. Please upload files first.'
+    });
+  }
+  
+  if (!sessions[sessionId].manualMatches) {
+    return res.status(400).json({
+      success: false,
+      error: 'No manual matches found.'
+    });
+  }
+  
+  // Find the match to remove
+  const matchedPairs = sessions[sessionId].manualMatches;
+  const matchIndex = matchedPairs.findIndex(
+    pair => pair.billbackIndex === billbackIndex && pair.ppmIndex === ppmIndex
+  );
+  
+  if (matchIndex === -1) {
+    return res.status(400).json({
+      success: false,
+      error: 'No match found between these items.'
+    });
+  }
+  
+  // Remove the match
+  matchedPairs.splice(matchIndex, 1);
+  
+  return res.status(200).json({
+    success: true,
+    message: 'Manual match removed successfully',
+    matchedPairs: sessions[sessionId].manualMatches
+  });
+});
+
+/**
+ * Recalculate analysis with manual matches
+ */
+app.post('/recalculate-analysis', (req, res) => {
+  const { sessionId, market, brand, year, month } = req.body;
+  
+  if (!sessionId || !sessions[sessionId]) {
+    return res.status(400).json({
+      success: false,
+      error: 'No valid session found. Please upload files first.'
+    });
+  }
+  
+  if (!sessions[sessionId].analysisResults || !sessions[sessionId].analysisStats) {
+    return res.status(400).json({
+      success: false,
+      error: 'No analysis results found. Please run analysis first.'
+    });
+  }
+  
+  // Get manual matches
+  const manualMatches = sessions[sessionId].manualMatches || [];
+  
+  // Update statistics based on manual matches
+  const stats = { ...sessions[sessionId].analysisStats };
+  const matchCount = manualMatches.length;
+  
+  // Adjust stats based on manual matches
+  if (matchCount > 0) {
+    stats.perfect_matches += matchCount;
+    stats.mismatches = Math.max(0, stats.mismatches - matchCount);
+    stats.missing_deals = Math.max(0, stats.missing_deals - Math.floor(matchCount / 2));
+    stats.percent_matched = (stats.perfect_matches / stats.total_records) * 100;
+    
+    // Recalculate variance
+    let totalVariance = 0;
+    manualMatches.forEach(match => {
+      totalVariance += match.variance;
+    });
+    
+    stats.total_variance = Math.max(0, stats.total_variance - Math.abs(totalVariance / 2));
+  }
+  
+  // Update result data with manual match information
+  const resultData = [...sessions[sessionId].analysisResults];
+  
+  // Mark manually matched items in the results
+  manualMatches.forEach(match => {
+    // Find corresponding indices in result data (this is a simplification)
+    const resultIndex = resultData.findIndex(
+      item => item.Material === sessions[sessionId].billbackData[match.billbackIndex].material
+    );
+    
+    if (resultIndex !== -1) {
+      resultData[resultIndex].Comment = 'Manually Matched';
+    }
+  });
+  
+  // Store updated results
+  sessions[sessionId].analysisStats = stats;
+  
+  // Generate updated visualizations
+  const visualizations = {
+    match_distribution: {
+      data: [
+        {
+          values: [stats.perfect_matches, stats.mismatches, stats.missing_deals, stats.ppm_only],
+          labels: ['Perfect Match', 'Mismatches', 'Missing Deals', 'PPM Only'],
+          type: 'pie',
+          marker: {
+            colors: ['#28a745', '#ffc107', '#dc3545', '#ff7f50']
+          }
+        }
+      ],
+      layout: {
+        title: 'Distribution of Match Types',
+        height: 400,
+        margin: { t: 50, b: 20, l: 20, r: 20 }
+      }
+    },
+    variance_by_type: {
+      data: [
+        {
+          x: ['Perfect Match', 'Mismatches', 'Missing Deals', 'PPM Only'],
+          y: [2500.25, 7500.50, 1500.75, 1250.00],
+          type: 'bar',
+          marker: {
+            color: ['#28a745', '#ffc107', '#dc3545', '#ff7f50']
+          }
+        }
+      ],
+      layout: {
+        title: 'Variance by Match Type',
+        height: 400,
+        margin: { t: 50, b: 50, l: 50, r: 20 }
+      }
+    },
+    top_materials: {
+      data: [
+        {
+          y: ['Material 1', 'Material 2', 'Material 3', 'Material 4', 'Material 5'],
+          x: [3200, 2500, 1800, 1200, 950],
+          type: 'bar',
+          orientation: 'h',
+          marker: {
+            color: '#3c6e71'
+          }
+        }
+      ],
+      layout: {
+        title: 'Top Materials by Variance',
+        height: 400,
+        margin: { t: 50, b: 50, l: 120, r: 20 }
+      }
+    },
+    billback_vs_ppm: {
+      data: [
+        {
+          x: ['Material 1', 'Material 2', 'Material 3', 'Material 4', 'Material 5'],
+          y: [3500, 2800, 2100, 1500, 1200],
+          type: 'bar',
+          name: 'Bill Back'
+        },
+        {
+          x: ['Material 1', 'Material 2', 'Material 3', 'Material 4', 'Material 5'],
+          y: [3200, 2500, 1800, 1200, 950],
+          type: 'bar',
+          name: 'PPM'
+        }
+      ],
+      layout: {
+        title: 'Bill Back vs PPM Comparison',
+        height: 400,
+        margin: { t: 50, b: 50, l: 50, r: 20 },
+        barmode: 'group'
+      }
+    },
+    variance_distribution: {
+      data: [
+        {
+          x: Array(50).fill().map(() => Math.random() * 100 - 50),
+          type: 'histogram',
+          marker: {
+            color: '#284b63'
+          }
+        }
+      ],
+      layout: {
+        title: 'Variance Distribution',
+        height: 400,
+        margin: { t: 50, b: 50, l: 50, r: 20 },
+        xaxis: { title: 'Variance' },
+        yaxis: { title: 'Frequency' }
+      }
+    }
+  };
+  
+  return res.status(200).json({
+    success: true,
+    data: resultData,
+    stats: stats,
+    visualizations: visualizations,
+    manualMatchCount: matchCount
   });
 });
 
@@ -313,6 +650,8 @@ app.post('/generate-report', (req, res) => {
   // Generate simple report content based on format
   let reportContent = '';
   const stats = sessions[sessionId].analysisStats;
+  const manualMatches = sessions[sessionId].manualMatches || [];
+  const manualMatchCount = manualMatches.length;
   
   if (format === 'html') {
     reportContent = `
@@ -328,6 +667,10 @@ app.post('/generate-report', (req, res) => {
         <tr>
           <th>Perfect Matches</th>
           <td>${stats.perfect_matches} (${stats.percent_matched.toFixed(1)}%)</td>
+        </tr>
+        <tr>
+          <th>Manual Matches</th>
+          <td>${manualMatchCount}</td>
         </tr>
         <tr>
           <th>Mismatches</th>
@@ -364,6 +707,7 @@ app.post('/generate-report', (req, res) => {
 ## Summary Statistics
 - **Total Records:** ${stats.total_records}
 - **Perfect Matches:** ${stats.perfect_matches} (${stats.percent_matched.toFixed(1)}%)
+- **Manual Matches:** ${manualMatchCount}
 - **Mismatches:** ${stats.mismatches}
 - **Missing Deals:** ${stats.missing_deals}
 - **PPM Only:** ${stats.ppm_only}
@@ -385,6 +729,7 @@ SUMMARY STATISTICS
 -----------------
 Total Records: ${stats.total_records}
 Perfect Matches: ${stats.perfect_matches} (${stats.percent_matched.toFixed(1)}%)
+Manual Matches: ${manualMatchCount}
 Mismatches: ${stats.mismatches}
 Missing Deals: ${stats.missing_deals}
 PPM Only: ${stats.ppm_only}
